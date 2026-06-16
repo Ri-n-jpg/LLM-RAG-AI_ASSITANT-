@@ -3,8 +3,8 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ChatMessage, Document
-from .tools import ask_llm
+from .models import ChatMessage, Document, DocumentChunk
+from .tools import ask_llm,get_embedding,search_chunks
 
 from pypdf import PdfReader
 
@@ -12,12 +12,10 @@ from pypdf import PdfReader
 # =========================
 # UTILITY: TEXT CHUNKING
 # =========================
-def split_text(text, chunk_size=500):
+def split_text(text, chunk_size=500, overlap=50):
     chunks = []
-
-    for i in range(0, len(text), chunk_size):
+    for i in range(0, len(text), chunk_size - overlap):
         chunks.append(text[i:i + chunk_size])
-
     return chunks
 
 
@@ -27,7 +25,10 @@ def split_text(text, chunk_size=500):
 @csrf_exempt
 def chat(request):
     if request.method != "POST":
-        return JsonResponse({"error": "Only POST method allowed"}, status=405)
+        return JsonResponse(
+            {"error": "Only POST method allowed"},
+            status=405
+        )
 
     try:
         # 1. Read input
@@ -35,7 +36,10 @@ def chat(request):
         user_message = data.get("message", "")
 
         if not user_message:
-            return JsonResponse({"error": "Empty message"}, status=400)
+            return JsonResponse(
+                {"error": "Empty message"},
+                status=400
+            )
 
         # 2. Save user message
         ChatMessage.objects.create(
@@ -43,38 +47,55 @@ def chat(request):
             message=user_message
         )
 
-        # 3. Get memory
-        history = ChatMessage.objects.all().order_by("-id")[:10]
-        history = reversed(history)
+        # 3. Retrieve relevant chunks
+        top_chunks = search_chunks(user_message)
 
-        # 4. Build messages
+        # 4. Create context from chunks
+        context = ""
+
+        for score, text in top_chunks:
+            context += text + "\n\n"
+
+        # 5. Build prompt
         messages = [
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant. Remember context."
+                "content": f"""
+You are a helpful AI assistant.
+
+Answer using the following PDF context:
+
+{context}
+
+If the answer is not present in the context,
+say:
+'I could not find this information in the uploaded document.'
+"""
+            },
+            {
+                "role": "user",
+                "content": user_message
             }
         ]
 
-        for msg in history:
-            messages.append({
-                "role": msg.role,
-                "content": msg.message
-            })
-
-        # 5. Call LLM
+        # 6. Call LLM
         response = ask_llm(messages)
 
-        # 6. Save assistant response
+        # 7. Save AI response
         ChatMessage.objects.create(
             role="assistant",
             message=response
         )
 
-        return JsonResponse({"response": response})
+        return JsonResponse({
+            "response": response
+        })
 
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
-
+        return JsonResponse(
+            {"error": str(e)},
+            status=500
+        )
 
 # =========================
 # PDF UPLOAD API
@@ -106,9 +127,14 @@ def upload_pdf(request):
     chunks = split_text(text)
 
     # Save chunks
-    doc.content = json.dumps(chunks)
-    doc.save()
+    for chunk in chunks:
+        embedding = get_embedding(chunk)
 
+        DocumentChunk.objects.create(
+            document=doc,
+            text=chunk,
+            embedding=embedding
+        )
     return JsonResponse({
         "message": "PDF uploaded successfully",
         "text_length": len(text),
