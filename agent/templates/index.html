@@ -4,200 +4,226 @@
     <title>AI RAG Chatbot</title>
 
     <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: white;
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+            font-family:Arial,sans-serif;
         }
 
-        /* HEADER */
-        .header {
-            padding: 15px;
-            text-align: center;
-            background: #111827;
-            font-size: 20px;
-            font-weight: bold;
+        body{
+            display:flex;
+            height:100vh;
+            background:#202123;
+            color:white;
         }
 
-        /* CONTAINER */
-        .container {
-            max-width: 900px;
-            margin: auto;
-            padding: 20px;
+        /* Sidebar */
+        .sidebar{
+            width:260px;
+            background:#171717;
+            padding:20px;
+            border-right:1px solid #333;
         }
 
-        /* BOX */
-        .box {
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
+        .sidebar h2{
+            margin-bottom:20px;
         }
 
-        /* CHAT BOX */
-        #chatBox {
-            height: 400px;
-            overflow-y: auto;
-            padding: 10px;
-            background: #0b1220;
-            border-radius: 10px;
+        .upload-box{
+            display:flex;
+            flex-direction:column;
+            gap:10px;
         }
 
-        /* MESSAGES */
-        .msg {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 10px;
-            max-width: 70%;
-            line-height: 1.4;
+        .upload-box input,
+        .upload-box button{
+            padding:10px;
+            border:none;
+            border-radius:8px;
         }
 
-        .user {
-            background: #2563eb;
-            margin-left: auto;
-            text-align: right;
+        .upload-box button{
+            background:#10a37f;
+            color:white;
+            cursor:pointer;
         }
 
-        .ai {
-            background: #374151;
-            margin-right: auto;
+        /* Chat Area */
+        .main{
+            flex:1;
+            display:flex;
+            flex-direction:column;
         }
 
-        /* INPUT AREA */
-        .inputBox {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
+        .header{
+            padding:20px;
+            border-bottom:1px solid #333;
+            font-size:22px;
+            font-weight:bold;
         }
 
-        input[type="text"] {
-            flex: 1;
-            padding: 12px;
-            border-radius: 8px;
-            border: none;
-            outline: none;
+        .chat-box{
+            flex:1;
+            overflow-y:auto;
+            padding:20px;
         }
 
-        button {
-            padding: 12px 18px;
-            border: none;
-            border-radius: 8px;
-            background: #22c55e;
-            color: white;
-            cursor: pointer;
-            font-weight: bold;
+        .message{
+            max-width:75%;
+            padding:12px;
+            margin-bottom:15px;
+            border-radius:12px;
+            line-height:1.5;
         }
 
-        button:hover {
-            background: #16a34a;
+        .user{
+            background:#10a37f;
+            margin-left:auto;
         }
 
-        /* UPLOAD */
-        input[type="file"] {
-            margin-right: 10px;
+        .ai{
+            background:#343541;
+        }
+
+        .input-area{
+            display:flex;
+            gap:10px;
+            padding:20px;
+            border-top:1px solid #333;
+        }
+
+        .input-area input{
+            flex:1;
+            padding:15px;
+            border:none;
+            border-radius:10px;
+            background:#40414f;
+            color:white;
+        }
+
+        .input-area button{
+            padding:15px 25px;
+            border:none;
+            border-radius:10px;
+            background:#10a37f;
+            color:white;
+            cursor:pointer;
         }
     </style>
 </head>
 
 <body>
 
-<div class="header">📄 AI RAG CHATBOT</div>
+<div class="sidebar">
+    <h2>📄 Documents</h2>
 
-<div class="container">
-
-    <!-- UPLOAD -->
-    <div class="box">
-        <h3>Upload PDF</h3>
+    <div class="upload-box">
         <input type="file" id="pdfFile">
-        <button onclick="uploadPDF()">Upload</button>
+        <button onclick="uploadPDF()">Upload PDF</button>
+
+        <div id="uploadStatus"></div>
+    </div>
+</div>
+
+<div class="main">
+
+    <div class="header">
+        AI RAG Chatbot
     </div>
 
-    <!-- CHAT -->
-    <div class="box">
-        <h3>Chat with PDF</h3>
+    <div class="chat-box" id="chatBox"></div>
 
-        <div id="chatBox"></div>
+    <div class="input-area">
+        <input
+            type="text"
+            id="message"
+            placeholder="Message AI..."
+            onkeypress="if(event.key==='Enter') sendMessage()"
+        >
 
-        <div class="inputBox">
-            <input type="text" id="message" placeholder="Ask something...">
-            <button onclick="sendMessage()">Send</button>
-        </div>
+        <button onclick="sendMessage()">
+            Send
+        </button>
     </div>
 
 </div>
 
 <script>
 
-const API_BASE = "http://127.0.0.1:8000/api";
+let currentDocId = null;
 
-// -------------------
-// ADD MESSAGE
-// -------------------
-function addMessage(text, type) {
-    let chatBox = document.getElementById("chatBox");
-
-    let div = document.createElement("div");
-    div.classList.add("msg", type);
-
-    div.innerText = text;
-
-    chatBox.appendChild(div);
-    chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-// -------------------
-// SEND MESSAGE
-// -------------------
-async function sendMessage() {
-    let input = document.getElementById("message");
-    let msg = input.value;
-
-    if (!msg) return;
-
-    addMessage("You: " + msg, "user");
-    input.value = "";
-
-    let res = await fetch("http://127.0.0.1:8000/api/chat/", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ message: msg })
-    });
-
-    let data = await res.json();
-
-    console.log("API RESPONSE:", data);
-
-    if (data.response) {
-        addMessage("AI: " + data.response, "ai");
-    } else {
-        addMessage("AI Error: " + (data.error || "Unknown error"), "ai");
-    }
-}
-
-// -------------------
-// UPLOAD PDF
-// -------------------
 async function uploadPDF() {
+
     let file = document.getElementById("pdfFile").files[0];
 
-    if (!file) {
-        alert("Select a PDF first");
+    if(!file){
+        alert("Select PDF first");
         return;
     }
 
     let formData = new FormData();
     formData.append("file", file);
 
-    let res = await fetch(`${API_BASE}/upload_pdf/`, {
-        method: "POST",
-        body: formData
+    let response = await fetch("/api/upload_pdf/",{
+        method:"POST",
+        body:formData
     });
 
-    let data = await res.json();
-    alert(data.message || "Uploaded");
+    let data = await response.json();
+
+    if(data.doc_id){
+        currentDocId = data.doc_id;
+    }
+
+    document.getElementById("uploadStatus").innerHTML =
+        "✅ PDF Uploaded";
+}
+
+async function sendMessage(){
+
+    let input = document.getElementById("message");
+    let message = input.value.trim();
+
+    if(!message) return;
+
+    addMessage("You", message, "user");
+
+    input.value="";
+
+    let response = await fetch("/api/chat/",{
+        method:"POST",
+        headers:{
+            "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+            message:message,
+            doc_id:currentDocId
+        })
+    });
+
+    let data = await response.json();
+
+    addMessage(
+        "AI",
+        data.response || data.error,
+        "ai"
+    );
+}
+
+function addMessage(sender,text,cls){
+
+    let chatBox=document.getElementById("chatBox");
+
+    let div=document.createElement("div");
+
+    div.className=`message ${cls}`;
+
+    div.innerHTML=`<b>${sender}:</b><br>${text}`;
+
+    chatBox.appendChild(div);
+
+    chatBox.scrollTop=chatBox.scrollHeight;
 }
 
 </script>
