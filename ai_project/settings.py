@@ -14,11 +14,19 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Build paths inside the project
+# -------------------------
+# BASE DIRECTORY
+# -------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env file
-load_dotenv(BASE_DIR / ".env")
+# -------------------------
+# LOAD .env FILE (IMPORTANT FIX)
+# -------------------------
+load_dotenv(BASE_DIR / ".env", override=True)
+
+# Debug (REMOVE AFTER FIX)
+print("🔑 GROQ KEY LOADED:", repr(os.getenv("GROQ_API_KEY")))
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 

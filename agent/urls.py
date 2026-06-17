@@ -1,9 +1,8 @@
 from django.urls import path
-from .views import chat
-from .views import upload_pdf
-from .views import split_text
+from .views import chat, upload_pdf, home
+
 urlpatterns = [
+    path("", home),
     path("chat/", chat),
-    path("upload/", upload_pdf),
-    path("split/", split_text)
+    path("upload_pdf/", upload_pdf),
 ]

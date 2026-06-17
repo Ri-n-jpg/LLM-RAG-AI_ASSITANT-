@@ -3,8 +3,7 @@ from sentence_transformers import SentenceTransformer
 import os
 import numpy as np
 
-from .models import DocumentChunk
-
+from .models import Document, DocumentChunk
 
 # -------------------------
 # Load models
@@ -17,7 +16,6 @@ if not api_key:
     raise Exception("❌ GROQ_API_KEY not found in environment variables")
 
 client = Groq(api_key=api_key)
-
 
 # -------------------------
 # LLM CALL
@@ -36,14 +34,12 @@ def ask_llm(messages):
     except Exception as e:
         return f"❌ LLM Error: {str(e)}"
 
-
 # -------------------------
 # EMBEDDINGS
 # -------------------------
 
 def get_embedding(text):
     return embedding_model.encode(text).tolist()
-
 
 # -------------------------
 # COSINE SIMILARITY
@@ -60,31 +56,30 @@ def cosine_similarity(vec1, vec2):
         np.linalg.norm(vec1) * np.linalg.norm(vec2)
     )
 
-
 # -------------------------
-# RAG SEARCH
+# RAG SEARCH (FIXED)
 # -------------------------
 
 def search_chunks(question, top_k=3):
+
     question_embedding = get_embedding(question)
 
-    results = []
+    # get latest uploaded document
+    latest_doc = Document.objects.latest("id")
 
-    chunks = DocumentChunk.objects.all()
+    chunks = DocumentChunk.objects.filter(document=latest_doc)
+
+    results = []
 
     for chunk in chunks:
 
         if not chunk.embedding:
             continue
 
-        score = cosine_similarity(
-            question_embedding,
-            chunk.embedding
-        )
+        score = cosine_similarity(question_embedding, chunk.embedding)
 
         results.append((score, chunk.text))
 
-    # IMPORTANT: explicit sorting
-    results.sort(key=lambda x: x[0], reverse=True)
+    results.sort(reverse=True, key=lambda x: x[0])
 
     return results[:top_k]
