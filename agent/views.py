@@ -1,17 +1,15 @@
 import json
 import uuid
+import numpy as np
+
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
 
-from .models import ChatMessage, Document, DocumentChunk
-from .tools import ask_llm, get_embedding
-
 from pypdf import PdfReader
 
-
-# =========================
-# HOME
+from .models import ChatMessage, Document, DocumentChunk, ChatSession
+from .tools import ask_llm, get_embedding
 # =========================
 def home(request):
     return render(request, "index.html")
@@ -30,7 +28,6 @@ def split_text(text, chunk_size=500, overlap=50):
 # =========================
 # CHAT API (RAG + GENERAL CHAT)
 # =========================
-
 @csrf_exempt
 def chat(request):
     if request.method != "POST":
@@ -38,22 +35,42 @@ def chat(request):
 
     try:
         data = json.loads(request.body)
+
         user_message = data.get("message", "").strip()
         doc_id = data.get("doc_id")
         session_id = data.get("session_id")
 
-        # Create new session if missing
-        if not session_id:
-            session_id = str(uuid.uuid4())
-
         if not user_message:
             return JsonResponse({"error": "Empty message"}, status=400)
 
+        # =========================
+        # SESSION HANDLING
+        # =========================
+        session = None
+
+        if session_id:
+            session = ChatSession.objects.filter(
+                session_id=session_id
+            ).first()
+
+        if not session:
+            session = ChatSession.objects.create(
+                session_id=str(uuid.uuid4()),
+                title=user_message[:30]
+            )
+
+        # Save user message
+        ChatMessage.objects.create(
+            session=session,
+            role="user",
+            message=user_message
+        )
+
         msg_lower = user_message.lower()
 
-        # -------------------------
+        # =========================
         # INTENT DETECTION
-        # -------------------------
+        # =========================
         is_summary = (
             "summarize" in msg_lower or
             "summary" in msg_lower
@@ -72,23 +89,27 @@ def chat(request):
             "who am i" in msg_lower
         )
 
-        is_general_chat = (
-            "what is" in msg_lower or
-            "who is" in msg_lower or
-            "define" in msg_lower
+        general_keywords = [
+            "what is",
+            "who is",
+            "where is",
+            "when",
+            "pm",
+            "president",
+            "capital",
+            "explain"
+        ]
+
+        is_general_chat = any(
+            keyword in msg_lower
+            for keyword in general_keywords
         )
 
-        # Save user message
-        ChatMessage.objects.create(
-            session_id=session_id,
-            role="user",
-            message=user_message
-        )
-
-        # -------------------------
+        # =========================
         # RAG RETRIEVAL
-        # -------------------------
+        # =========================
         context = ""
+        source_info = None
 
         skip_rag = is_personal or is_general_chat
 
@@ -101,10 +122,11 @@ def chat(request):
                 document = Document.objects.order_by("-id").first()
 
             if document:
-                chunks_qs = DocumentChunk.objects.filter(document=document)
+                chunks_qs = DocumentChunk.objects.filter(
+                    document=document
+                )
 
                 question_embedding = get_embedding(user_message)
-
                 scored = []
 
                 for chunk in chunks_qs:
@@ -122,17 +144,32 @@ def chat(request):
                         chunk.id,
                         chunk.document.title
                     ))
+
                 scored.sort(
                     key=lambda x: x[0],
                     reverse=True
                 )
 
                 top_chunks = scored[:4]
+                SIMILARITY_THRESHOLD = 0.30
+
+                if not top_chunks or top_chunks[0][0] < SIMILARITY_THRESHOLD:
+                    context = ""
+                    source_info = None
+                else:
+                    context = "\n\n".join([chunk[1] for chunk in top_chunks])
+
+                    best_chunk = top_chunks[0]
+
+                    source_info = {
+                        "score": round(best_chunk[0], 3),
+                        "chunk_id": best_chunk[2],
+                        "document": best_chunk[3]
+                    }
 
                 context = "\n\n".join(
                     [chunk[1] for chunk in top_chunks]
                 )
-                source_info = None
 
                 if top_chunks:
                     best_chunk = top_chunks[0]
@@ -143,26 +180,24 @@ def chat(request):
                         "document": best_chunk[3]
                     }
 
-        # -------------------------
+        # =========================
         # SYSTEM PROMPT
-        # -------------------------
+        # =========================
         if is_personal:
             system_prompt = """
 You are a helpful AI assistant.
 
 IMPORTANT:
-1. Use conversation history for personal questions.
-2. Latest user message overrides old information.
-3. Ignore document context.
+1. Use conversation history for personal questions
+2. Latest user message overrides old info
+3. Ignore document context
 """
-
         elif not context.strip():
             system_prompt = """
 You are a helpful AI assistant.
 Use conversation history for follow-up questions.
 Answer normally.
 """
-
         elif is_resume:
             system_prompt = f"""
 You are a resume expert.
@@ -176,7 +211,6 @@ Extract:
 Context:
 {context}
 """
-
         elif is_health:
             system_prompt = f"""
 You are a medical report assistant.
@@ -189,17 +223,14 @@ Analyze:
 Context:
 {context}
 """
-
         elif is_summary:
             system_prompt = f"""
 You are a document summarizer.
-
 Summarize in bullet points.
 
 Context:
 {context}
 """
-
         else:
             system_prompt = f"""
 You are a helpful AI assistant.
@@ -212,11 +243,11 @@ Document Context:
 {context}
 """
 
-        # -------------------------
-        # CHAT MEMORY
-        # -------------------------
+        # =========================
+        # MEMORY
+        # =========================
         chat_history = ChatMessage.objects.filter(
-            session_id=session_id
+            session=session
         ).order_by("-id")[:10]
 
         chat_history = reversed(chat_history)
@@ -234,31 +265,29 @@ Document Context:
                 "content": msg.message
             })
 
-        # Debug
-        print(messages)
-
-        # -------------------------
+        # =========================
         # LLM CALL
-        # -------------------------
+        # =========================
         response = ask_llm(messages)
 
-        # Save assistant response
+        # Save assistant reply
         ChatMessage.objects.create(
-            session_id=session_id,
+            session=session,
             role="assistant",
             message=response
         )
 
         return JsonResponse({
             "response": response,
-            "session_id": session_id,
+            "session_id": session.session_id,
             "source": source_info
         })
-
     except Exception as e:
         return JsonResponse({
             "error": str(e)
         }, status=500)
+
+
 
 # =========================
 # PDF UPLOAD API (FIXED)
@@ -319,7 +348,6 @@ def upload_pdf(request):
 # =========================
 # COSINE SIMILARITY
 # =========================
-import numpy as np
 
 def cosine_similarity(v1, v2):
     v1 = np.array(v1)
@@ -329,3 +357,34 @@ def cosine_similarity(v1, v2):
         return 0
 
     return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+
+def get_sessions(request):
+    sessions = ChatSession.objects.all().order_by("-created_at")
+
+    data = []
+    for s in sessions:
+        data.append({
+            "session_id": s.session_id,
+            "title": s.title
+        })
+
+    return JsonResponse({"sessions": data})
+
+def get_messages(request, session_id):
+    session = ChatSession.objects.filter(
+        session_id=session_id
+    ).first()
+
+    if not session:
+        return JsonResponse({"messages": []})
+
+    messages = ChatMessage.objects.filter(session=session)
+
+    data = []
+    for msg in messages:
+        data.append({
+            "role": msg.role,
+            "message": msg.message
+        })
+
+    return JsonResponse({"messages": data})

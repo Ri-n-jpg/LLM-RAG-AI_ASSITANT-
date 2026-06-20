@@ -24,16 +24,54 @@
             background:#171717;
             padding:20px;
             border-right:1px solid #333;
+            overflow-y:auto;
         }
 
         .sidebar h2{
             margin-bottom:20px;
         }
 
-        .upload-box{
+        .new-chat-btn{
+            width:100%;
+            padding:12px;
+            border:none;
+            border-radius:10px;
+            background:#10a37f;
+            color:white;
+            cursor:pointer;
+            margin-bottom:20px;
+        }
+
+        .session-item{
+            background:#2a2b32;
+            padding:12px;
+            margin-bottom:10px;
+            border-radius:8px;
+            cursor:pointer;
+        }
+
+        .session-item:hover{
+            background:#343541;
+        }
+
+        /* Main Chat Area */
+        .main{
+            flex:1;
             display:flex;
             flex-direction:column;
+        }
+
+        .header{
+            padding:20px;
+            border-bottom:1px solid #333;
+            font-size:22px;
+            font-weight:bold;
+        }
+
+        .upload-box{
+            display:flex;
             gap:10px;
+            padding:20px;
         }
 
         .upload-box input,
@@ -47,20 +85,6 @@
             background:#10a37f;
             color:white;
             cursor:pointer;
-        }
-
-        /* Chat Area */
-        .main{
-            flex:1;
-            display:flex;
-            flex-direction:column;
-        }
-
-        .header{
-            padding:20px;
-            border-bottom:1px solid #333;
-            font-size:22px;
-            font-weight:bold;
         }
 
         .chat-box{
@@ -112,49 +136,46 @@
         }
     </style>
 </head>
-
 <body>
 
-<div class="sidebar">
-    <h2>📄 Documents</h2>
+    {% include "sidebar.html" %}
 
-    <div class="upload-box">
-        <input type="file" id="pdfFile">
-        <button onclick="uploadPDF()">Upload PDF</button>
+    <div class="main">
 
-        <div id="uploadStatus"></div>
+        <div class="header">
+            AI RAG Chatbot
+        </div>
+
+        <div class="upload-box">
+            <input type="file" id="pdfFile">
+            <button onclick="uploadPDF()">Upload PDF</button>
+            <div id="uploadStatus"></div>
+        </div>
+
+        <div class="chat-box" id="chatBox"></div>
+
+        <div class="input-area">
+            <input
+                type="text"
+                id="message"
+                placeholder="Message AI..."
+                onkeypress="if(event.key==='Enter') sendMessage()"
+            >
+
+            <button onclick="sendMessage()">
+                Send
+            </button>
+        </div>
+
     </div>
-</div>
-
-<div class="main">
-
-    <div class="header">
-        AI RAG Chatbot
-    </div>
-
-    <div class="chat-box" id="chatBox"></div>
-
-    <div class="input-area">
-        <input
-            type="text"
-            id="message"
-            placeholder="Message AI..."
-            onkeypress="if(event.key==='Enter') sendMessage()"
-        >
-
-        <button onclick="sendMessage()">
-            Send
-        </button>
-    </div>
-
-</div>
 
 <script>
 let currentDocId = null;
-
-// NEW: session memory
 let sessionId = localStorage.getItem("session_id");
 
+// =========================
+// Upload PDF
+// =========================
 async function uploadPDF() {
     let file = document.getElementById("pdfFile").files[0];
 
@@ -183,6 +204,9 @@ async function uploadPDF() {
     }
 }
 
+// =========================
+// Send Message
+// =========================
 async function sendMessage() {
     let input = document.getElementById("message");
     let message = input.value.trim();
@@ -190,7 +214,6 @@ async function sendMessage() {
     if (!message) return;
 
     addMessage("You", message, "user");
-
     input.value = "";
 
     let response = await fetch("/api/chat/", {
@@ -201,27 +224,28 @@ async function sendMessage() {
         body: JSON.stringify({
             message: message,
             doc_id: currentDocId,
-            session_id: sessionId   // NEW
+            session_id: sessionId
         })
     });
 
     let data = await response.json();
-    if (data.source) {
-    addMessage(
-        "Source",
-        `Document: ${data.source.document}
-Chunk: ${data.source.chunk_id}
-Score: ${data.source.score}`,
-        "ai"
-    );
-}
 
-    // NEW: save session from backend
-    if (data.session_id) {
+    if (data.source) {
+        addMessage(
+            "Source",
+            `Document: ${data.source.document}<br>
+             Chunk: ${data.source.chunk_id}<br>
+             Score: ${data.source.score}`,
+            "ai"
+        );
+    }
+
+    if (data.session_id && !sessionId) {
         sessionId = data.session_id;
         localStorage.setItem("session_id", sessionId);
+
+        addSession(message, sessionId);
     }
-    console.log(data)
 
     addMessage(
         "AI",
@@ -230,26 +254,38 @@ Score: ${data.source.score}`,
     );
 }
 
+// =========================
+// Add Message to Chat UI
+// =========================
 function addMessage(sender, text, cls) {
     let chatBox = document.getElementById("chatBox");
 
     let div = document.createElement("div");
-
     div.className = `message ${cls}`;
-
     div.innerHTML = `<b>${sender}:</b><br>${text}`;
 
     chatBox.appendChild(div);
-
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// OPTIONAL: Start new chat
-function newChat() {
-    localStorage.removeItem("session_id");
-    sessionId = null;
-    document.getElementById("chatBox").innerHTML = "";
-}
+// =========================
+// New Chat
+// =========================
+
+
+// =========================
+// Add Session in Sidebar
+// =========================
+
+
+// =========================
+// Load All Sessions
+// =========================
+
+
+// =========================
+// Open Old Session
+// =========================
+
+// Auto load sessions
 </script>
-</body>
-</html>

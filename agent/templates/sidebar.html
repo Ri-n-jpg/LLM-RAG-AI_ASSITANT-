@@ -1,0 +1,143 @@
+<style>
+.sidebar {
+    width: 260px;
+    height: 100vh;
+    background: #171717;
+    border-right: 1px solid #333;
+    padding: 15px;
+    color: white;
+    overflow-y: auto;
+}
+
+.new-chat-btn {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    background: #10a37f;
+    border: none;
+    color: white;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.new-chat-btn:hover {
+    background: #0e8c6d;
+}
+
+#chatList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-item {
+    padding: 10px;
+    border-radius: 6px;
+    background: #202123;
+    cursor: pointer;
+    font-size: 14px;
+    border: 1px solid #2c2c2c;
+    transition: 0.2s;
+}
+
+.chat-item:hover {
+    background: #2c2c2c;
+}
+</style>
+
+<div class="sidebar">
+
+    <!-- NEW CHAT -->
+    <button class="new-chat-btn" onclick="newChat()">
+        + New Chat
+    </button>
+
+    <!-- SESSION LIST -->
+    <div id="chatList"></div>
+
+</div>
+
+<script>
+/* =========================
+   LOAD ALL SESSIONS
+========================= */
+async function loadSessions() {
+    try {
+        let response = await fetch("/api/sessions/");
+        let data = await response.json();
+
+        let container = document.getElementById("chatList");
+        container.innerHTML = "";
+
+        data.sessions.forEach(session => {
+            addSession(session.title, session.session_id);
+        });
+
+    } catch (err) {
+        console.log("Error loading sessions:", err);
+    }
+}
+
+/* =========================
+   ADD SESSION TO SIDEBAR
+========================= */
+function addSession(title, sessionId) {
+    let container = document.getElementById("chatList");
+
+    let div = document.createElement("div");
+    div.className = "chat-item";
+    div.innerText = title || "New Chat";
+
+    div.onclick = function () {
+        openSession(sessionId);
+    };
+
+    container.appendChild(div);
+}
+
+/* =========================
+   NEW CHAT
+========================= */
+function newChat() {
+    localStorage.removeItem("session_id");
+
+    if (typeof sessionId !== "undefined") {
+        sessionId = null;
+    }
+
+    document.getElementById("chatBox").innerHTML = "";
+}
+
+/* =========================
+   OPEN OLD CHAT
+========================= */
+async function openSession(id) {
+    try {
+        let response = await fetch(`/api/messages/${id}/`);
+        let data = await response.json();
+
+        document.getElementById("chatBox").innerHTML = "";
+
+        data.messages.forEach(msg => {
+            addMessage(
+                msg.role === "user" ? "You" : "AI",
+                msg.message,
+                msg.role === "user" ? "user" : "ai"
+            );
+        });
+
+        localStorage.setItem("session_id", id);
+
+    } catch (err) {
+        console.log("Error loading messages:", err);
+    }
+}
+
+/* =========================
+   AUTO LOAD ON PAGE START
+========================= */
+window.onload = function () {
+    loadSessions();
+};
+</script>

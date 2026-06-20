@@ -21,7 +21,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # LOAD .env
 load_dotenv(BASE_DIR / ".env", override=True)
 
-print("GROQ:", repr(os.getenv("GROQ_API_KEY")))
 
 SECRET_KEY = 'django-insecure-a0llx^et^!cvo-=c3)9%n53@p@(17vb)9(che@kt!#0xb+ia(u'
 
