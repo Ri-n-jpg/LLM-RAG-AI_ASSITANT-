@@ -116,8 +116,12 @@ def chat(request):
                         chunk.embedding
                     )
 
-                    scored.append((score, chunk.text))
-
+                    scored.append((
+                        score,
+                        chunk.text,
+                        chunk.id,
+                        chunk.document.title
+                    ))
                 scored.sort(
                     key=lambda x: x[0],
                     reverse=True
@@ -128,6 +132,16 @@ def chat(request):
                 context = "\n\n".join(
                     [chunk[1] for chunk in top_chunks]
                 )
+                source_info = None
+
+                if top_chunks:
+                    best_chunk = top_chunks[0]
+
+                    source_info = {
+                        "score": round(best_chunk[0], 3),
+                        "chunk_id": best_chunk[2],
+                        "document": best_chunk[3]
+                    }
 
         # -------------------------
         # SYSTEM PROMPT
@@ -237,7 +251,8 @@ Document Context:
 
         return JsonResponse({
             "response": response,
-            "session_id": session_id
+            "session_id": session_id,
+            "source": source_info
         })
 
     except Exception as e:

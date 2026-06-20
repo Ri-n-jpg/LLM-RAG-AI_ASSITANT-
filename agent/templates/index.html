@@ -206,12 +206,22 @@ async function sendMessage() {
     });
 
     let data = await response.json();
+    if (data.source) {
+    addMessage(
+        "Source",
+        `Document: ${data.source.document}
+Chunk: ${data.source.chunk_id}
+Score: ${data.source.score}`,
+        "ai"
+    );
+}
 
     // NEW: save session from backend
     if (data.session_id) {
         sessionId = data.session_id;
         localStorage.setItem("session_id", sessionId);
     }
+    console.log(data)
 
     addMessage(
         "AI",
