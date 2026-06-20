@@ -150,14 +150,15 @@
 </div>
 
 <script>
-
 let currentDocId = null;
 
-async function uploadPDF() {
+// NEW: session memory
+let sessionId = localStorage.getItem("session_id");
 
+async function uploadPDF() {
     let file = document.getElementById("pdfFile").files[0];
 
-    if(!file){
+    if (!file) {
         alert("Select PDF first");
         return;
     }
@@ -165,44 +166,52 @@ async function uploadPDF() {
     let formData = new FormData();
     formData.append("file", file);
 
-    let response = await fetch("/api/upload_pdf/",{
-        method:"POST",
-        body:formData
+    let response = await fetch("/api/upload_pdf/", {
+        method: "POST",
+        body: formData
     });
 
     let data = await response.json();
 
-    if(data.doc_id){
+    if (data.doc_id) {
         currentDocId = data.doc_id;
+        document.getElementById("uploadStatus").innerHTML =
+            "✅ PDF Uploaded";
+    } else {
+        document.getElementById("uploadStatus").innerHTML =
+            data.error;
     }
-
-    document.getElementById("uploadStatus").innerHTML =
-        "✅ PDF Uploaded";
 }
 
-async function sendMessage(){
-
+async function sendMessage() {
     let input = document.getElementById("message");
     let message = input.value.trim();
 
-    if(!message) return;
+    if (!message) return;
 
     addMessage("You", message, "user");
 
-    input.value="";
+    input.value = "";
 
-    let response = await fetch("/api/chat/",{
-        method:"POST",
-        headers:{
-            "Content-Type":"application/json"
+    let response = await fetch("/api/chat/", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
         },
-        body:JSON.stringify({
-            message:message,
-            doc_id:currentDocId
+        body: JSON.stringify({
+            message: message,
+            doc_id: currentDocId,
+            session_id: sessionId   // NEW
         })
     });
 
     let data = await response.json();
+
+    // NEW: save session from backend
+    if (data.session_id) {
+        sessionId = data.session_id;
+        localStorage.setItem("session_id", sessionId);
+    }
 
     addMessage(
         "AI",
@@ -211,22 +220,26 @@ async function sendMessage(){
     );
 }
 
-function addMessage(sender,text,cls){
+function addMessage(sender, text, cls) {
+    let chatBox = document.getElementById("chatBox");
 
-    let chatBox=document.getElementById("chatBox");
+    let div = document.createElement("div");
 
-    let div=document.createElement("div");
+    div.className = `message ${cls}`;
 
-    div.className=`message ${cls}`;
-
-    div.innerHTML=`<b>${sender}:</b><br>${text}`;
+    div.innerHTML = `<b>${sender}:</b><br>${text}`;
 
     chatBox.appendChild(div);
 
-    chatBox.scrollTop=chatBox.scrollHeight;
+    chatBox.scrollTop = chatBox.scrollHeight;
 }
 
+// OPTIONAL: Start new chat
+function newChat() {
+    localStorage.removeItem("session_id");
+    sessionId = null;
+    document.getElementById("chatBox").innerHTML = "";
+}
 </script>
-
 </body>
 </html>
