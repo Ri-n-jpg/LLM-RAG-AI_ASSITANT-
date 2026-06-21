@@ -388,3 +388,23 @@ def get_messages(request, session_id):
         })
 
     return JsonResponse({"messages": data})
+
+
+@csrf_exempt
+def delete_session(request, session_id):
+    if request.method != "DELETE":
+        return JsonResponse({"error": "Only DELETE allowed"}, status=405)
+
+    session = ChatSession.objects.filter(
+        session_id=session_id
+    ).first()
+
+    if not session:
+        return JsonResponse({"error": "Session not found"}, status=404)
+
+    session.delete()
+
+    return JsonResponse({
+        "message": "Session deleted"
+    })
+

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import chat, upload_pdf, home,get_sessions,get_messages
+from .views import chat, upload_pdf, home,get_sessions,get_messages,delete_session
 
 urlpatterns = [
     path("", home),
@@ -7,4 +7,5 @@ urlpatterns = [
     path("upload_pdf/", upload_pdf),
 path("sessions/", get_sessions),
 path("messages/<str:session_id>/", get_messages),
+path("delete-session/<str:session_id>/", delete_session),
 ]

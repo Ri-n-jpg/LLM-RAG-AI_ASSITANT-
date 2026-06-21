@@ -54,7 +54,7 @@
     </button>
 
     <!-- SESSION LIST -->
-    <div id="chatList"></div>
+    <div id="chatSessions"></div>
 
 </div>
 
@@ -67,11 +67,16 @@ async function loadSessions() {
         let response = await fetch("/api/sessions/");
         let data = await response.json();
 
-        let container = document.getElementById("chatList");
+        console.log(data);
+
+        let container = document.getElementById("chatSessions");
         container.innerHTML = "";
 
         data.sessions.forEach(session => {
-            addSession(session.title, session.session_id);
+            addSession(
+                session.title,
+                session.session_id
+            );
         });
 
     } catch (err) {
@@ -83,17 +88,37 @@ async function loadSessions() {
    ADD SESSION TO SIDEBAR
 ========================= */
 function addSession(title, sessionId) {
-    let container = document.getElementById("chatList");
+    let chatList = document.getElementById("chatSessions");
 
-    let div = document.createElement("div");
-    div.className = "chat-item";
-    div.innerText = title || "New Chat";
+    let wrapper = document.createElement("div");
+    wrapper.style.display = "flex";
+    wrapper.style.justifyContent = "space-between";
+    wrapper.style.alignItems = "center";
+    wrapper.style.padding = "10px";
+    wrapper.style.marginBottom = "8px";
+    wrapper.style.background = "#2d2d2d";
+    wrapper.style.borderRadius = "8px";
 
-    div.onclick = function () {
+    let titleDiv = document.createElement("div");
+    titleDiv.innerText = title;
+    titleDiv.style.cursor = "pointer";
+
+    titleDiv.onclick = function () {
         openSession(sessionId);
     };
 
-    container.appendChild(div);
+    let deleteBtn = document.createElement("button");
+    deleteBtn.innerText = "🗑";
+
+    deleteBtn.onclick = function (e) {
+        e.stopPropagation();
+        deleteSession(sessionId);
+    };
+
+    wrapper.appendChild(titleDiv);
+    wrapper.appendChild(deleteBtn);
+
+    chatList.appendChild(wrapper);
 }
 
 /* =========================
@@ -117,7 +142,10 @@ async function openSession(id) {
         let response = await fetch(`/api/messages/${id}/`);
         let data = await response.json();
 
-        document.getElementById("chatBox").innerHTML = "";
+        console.log(data);
+
+        let chatBox = document.getElementById("chatBox");
+        chatBox.innerHTML = "";
 
         data.messages.forEach(msg => {
             addMessage(
@@ -131,6 +159,28 @@ async function openSession(id) {
 
     } catch (err) {
         console.log("Error loading messages:", err);
+    }
+}
+
+/* =========================
+   DELETE SESSION
+========================= */
+async function deleteSession(sessionId) {
+    try {
+        let response = await fetch(
+            `/api/delete-session/${sessionId}/`,
+            {
+                method: "DELETE"
+            }
+        );
+
+        let data = await response.json();
+        alert(data.message);
+
+        loadSessions();
+
+    } catch (err) {
+        console.log("Delete error:", err);
     }
 }
 
