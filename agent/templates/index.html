@@ -137,7 +137,6 @@
     </style>
 </head>
 <body>
-
     {% include "sidebar.html" %}
 
     <div class="main">
@@ -170,7 +169,7 @@
     </div>
 
 <script>
-let currentDocId = null;
+let currentDocId = localStorage.getItem("doc_id");
 let sessionId = localStorage.getItem("session_id");
 
 // =========================
@@ -196,6 +195,7 @@ async function uploadPDF() {
 
     if (data.doc_id) {
         currentDocId = data.doc_id;
+localStorage.setItem("doc_id", currentDocId);
         document.getElementById("uploadStatus").innerHTML =
             "✅ PDF Uploaded";
     } else {
@@ -267,6 +267,19 @@ function addMessage(sender, text, cls) {
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
 }
+
+
+async function checkLogin() {
+    let res = await fetch("/api/check-auth/");
+    let data = await res.json();
+
+    if (!data.authenticated) {
+        window.location.href = "/api/login-page/";
+    }
+}
+
+checkLogin();
+
 
 // =========================
 // New Chat

@@ -2,28 +2,116 @@ import json
 import uuid
 import numpy as np
 
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 
 from pypdf import PdfReader
 
 from .models import ChatMessage, Document, DocumentChunk, ChatSession
 from .tools import ask_llm, get_embedding
+
+
 # =========================
+# AUTH PAGES
+# =========================
+
+def signup_page(request):
+    if request.user.is_authenticated:
+        return redirect("/api/")
+    return render(request, "signup.html")
+
+
+def login_page(request):
+    if request.user.is_authenticated:
+        return redirect("/api/")
+    return render(request, "login.html")
+
+
 def home(request):
-    return render(request, "index.html")
+    if request.user.is_authenticated:
+        return render(request, "index.html")
+    return redirect("/api/login-page/")
+
+
+# =========================
+# SIGNUP API
+# =========================
+
+@csrf_exempt
+def signup_user(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"})
+
+    data = json.loads(request.body)
+
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
+
+    if User.objects.filter(username=username).exists():
+        return JsonResponse({"error": "Username exists"})
+
+    User.objects.create_user(
+        username=username,
+        email=email,
+        password=password
+    )
+
+    return JsonResponse({
+        "message": "Signup successful"
+    })
+
+
+# =========================
+# LOGIN API (FIXED)
+# =========================
+
+@csrf_exempt
+def login_user(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"})
+
+    data = json.loads(request.body)
+
+    username = data.get("username")
+    password = data.get("password")
+
+    user = authenticate(username=username, password=password)
+
+    if user is None:
+        return JsonResponse({"error": "Invalid credentials"})
+
+    # 🔥 IMPORTANT FIX (THIS WAS MISSING)
+    login(request, user)
+
+    return JsonResponse({
+        "message": "Login successful"
+    })
+
+
+# =========================
+# LOGOUT
+# =========================
+
+def logout_user(request):
+    logout(request)
+    return JsonResponse({
+        "message": "Logged out"
+    })
 
 
 # =========================
 # CHUNKING
 # =========================
+
 def split_text(text, chunk_size=500, overlap=50):
     chunks = []
     for i in range(0, len(text), chunk_size - overlap):
         chunks.append(text[i:i + chunk_size])
     return chunks
-
 
 # =========================
 # CHAT API (RAG + GENERAL CHAT)
@@ -32,6 +120,8 @@ def split_text(text, chunk_size=500, overlap=50):
 def chat(request):
     if request.method != "POST":
         return JsonResponse({"error": "Only POST allowed"}, status=405)
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
 
     try:
         data = json.loads(request.body)
@@ -50,11 +140,12 @@ def chat(request):
 
         if session_id:
             session = ChatSession.objects.filter(
-                session_id=session_id
+                session_id=session_id,
+                user=request.user
             ).first()
-
         if not session:
             session = ChatSession.objects.create(
+                user=request.user,  # 🔥 REQUIRED FIX
                 session_id=str(uuid.uuid4()),
                 title=user_message[:30]
             )
@@ -111,9 +202,21 @@ def chat(request):
         context = ""
         source_info = None
 
-        skip_rag = is_personal or is_general_chat
+        is_greeting = msg_lower in [
+            "hi", "hii", "hello", "hey",
+            "whats going on", "what's going on"
+        ]
 
-        if not skip_rag:
+        # RAG only when explicitly needed
+        force_rag = (
+                is_summary or
+                is_resume or
+                is_health or
+                (doc_id is not None)
+        )
+        print("FORCE RAG:", force_rag)
+
+        if force_rag:
             document = None
 
             if doc_id:
@@ -151,7 +254,7 @@ def chat(request):
                 )
 
                 top_chunks = scored[:4]
-                SIMILARITY_THRESHOLD = 0.30
+                SIMILARITY_THRESHOLD = 0.25
 
                 if not top_chunks or top_chunks[0][0] < SIMILARITY_THRESHOLD:
                     context = ""
@@ -167,18 +270,6 @@ def chat(request):
                         "document": best_chunk[3]
                     }
 
-                context = "\n\n".join(
-                    [chunk[1] for chunk in top_chunks]
-                )
-
-                if top_chunks:
-                    best_chunk = top_chunks[0]
-
-                    source_info = {
-                        "score": round(best_chunk[0], 3),
-                        "chunk_id": best_chunk[2],
-                        "document": best_chunk[3]
-                    }
 
         # =========================
         # SYSTEM PROMPT
@@ -276,6 +367,7 @@ Document Context:
             role="assistant",
             message=response
         )
+        print("DOC ID RECEIVED:", doc_id)
 
         return JsonResponse({
             "response": response,
@@ -359,20 +451,27 @@ def cosine_similarity(v1, v2):
     return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
 
 def get_sessions(request):
-    sessions = ChatSession.objects.all().order_by("-created_at")
+    if not request.user.is_authenticated:
+        return JsonResponse({"sessions": []})
 
-    data = []
-    for s in sessions:
-        data.append({
+    sessions = ChatSession.objects.filter(
+        user=request.user
+    ).order_by("-created_at")
+
+    data = [
+        {
             "session_id": s.session_id,
             "title": s.title
-        })
+        }
+        for s in sessions
+    ]
 
     return JsonResponse({"sessions": data})
 
 def get_messages(request, session_id):
     session = ChatSession.objects.filter(
-        session_id=session_id
+        session_id=session_id,
+        user=request.user
     ).first()
 
     if not session:
@@ -380,15 +479,15 @@ def get_messages(request, session_id):
 
     messages = ChatMessage.objects.filter(session=session)
 
-    data = []
-    for msg in messages:
-        data.append({
+    data = [
+        {
             "role": msg.role,
             "message": msg.message
-        })
+        }
+        for msg in messages
+    ]
 
     return JsonResponse({"messages": data})
-
 
 @csrf_exempt
 def delete_session(request, session_id):
@@ -396,7 +495,8 @@ def delete_session(request, session_id):
         return JsonResponse({"error": "Only DELETE allowed"}, status=405)
 
     session = ChatSession.objects.filter(
-        session_id=session_id
+        session_id=session_id,
+        user=request.user
     ).first()
 
     if not session:
@@ -404,7 +504,4 @@ def delete_session(request, session_id):
 
     session.delete()
 
-    return JsonResponse({
-        "message": "Session deleted"
-    })
-
+    return JsonResponse({"message": "Session deleted"})

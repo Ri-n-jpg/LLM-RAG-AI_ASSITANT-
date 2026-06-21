@@ -1,6 +1,10 @@
 from django.db import models
-
+from django.contrib.auth.models import User
 class ChatSession(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE
+    )
     session_id = models.CharField(max_length=100, unique=True)
     title = models.CharField(max_length=255, default="New Chat")
     created_at = models.DateTimeField(auto_now_add=True)

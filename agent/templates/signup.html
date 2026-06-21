@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+    <h2>Signup</h2>
+
+    <input id="username" placeholder="Username">
+    <input id="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+
+    <button onclick="signup()">Signup</button>
+
+    <div id="status"></div>
+
+    <div class="link">
+        Already have an account?
+        <a href="/api/login-page/">Login</a>
+    </div>
+</div>
+
+<script>
+async function signup() {
+    let username = document.getElementById("username");
+    let email = document.getElementById("email");
+    let password = document.getElementById("password");
+    let status = document.getElementById("status");
+
+    let response = await fetch("/api/signup/", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            username: username.value,
+            email: email.value,
+            password: password.value
+        })
+    });
+
+    let data = await response.json();
+
+    if (data.message) {
+        window.location.href = "/api/login-page/";
+    } else {
+        status.innerHTML = data.error;
+    }
+}
+</script>
+
+</body>
+</html>

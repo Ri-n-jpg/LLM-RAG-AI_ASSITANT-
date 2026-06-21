@@ -125,13 +125,19 @@ function addSession(title, sessionId) {
    NEW CHAT
 ========================= */
 function newChat() {
+    // Clear session
     localStorage.removeItem("session_id");
+    sessionId = null;
 
-    if (typeof sessionId !== "undefined") {
-        sessionId = null;
-    }
+    // Clear current PDF
+    localStorage.removeItem("doc_id");
+    currentDocId = null;
 
+    // Clear chat UI
     document.getElementById("chatBox").innerHTML = "";
+
+    // Reset upload status
+    document.getElementById("uploadStatus").innerHTML = "";
 }
 
 /* =========================
@@ -139,6 +145,7 @@ function newChat() {
 ========================= */
 async function openSession(id) {
     try {
+    sessionId=id
         let response = await fetch(`/api/messages/${id}/`);
         let data = await response.json();
 
