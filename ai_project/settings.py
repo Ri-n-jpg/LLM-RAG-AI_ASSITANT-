@@ -15,19 +15,33 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
+# =========================
 # BASE DIRECTORY
+# =========================
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# LOAD .env
+# =========================
+# LOAD ENV VARIABLES
+# =========================
 load_dotenv(BASE_DIR / ".env", override=True)
 
+# =========================
+# SECURITY
+# =========================
+SECRET_KEY = os.getenv("SECRET_KEY")
 
-SECRET_KEY = 'django-insecure-a0llx^et^!cvo-=c3)9%n53@p@(17vb)9(che@kt!#0xb+ia(u'
+DEBUG = os.getenv("DEBUG", "True") == "True"
 
-DEBUG = True
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    # Add deployed domain later:
+    # "your-app.onrender.com"
+]
 
-ALLOWED_HOSTS = []
-
+# =========================
+# INSTALLED APPS
+# =========================
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -35,10 +49,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
     'rest_framework',
     'agent',
 ]
 
+# =========================
+# MIDDLEWARE
+# =========================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -49,12 +67,18 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# =========================
+# URL CONFIG
+# =========================
 ROOT_URLCONF = 'ai_project.urls'
 
+# =========================
+# TEMPLATES
+# =========================
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "templates"],  # optional
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -66,9 +90,14 @@ TEMPLATES = [
     },
 ]
 
+# =========================
+# WSGI
+# =========================
 WSGI_APPLICATION = 'ai_project.wsgi.application'
 
-# PostgreSQL Database
+# =========================
+# DATABASE (PostgreSQL)
+# =========================
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -76,10 +105,13 @@ DATABASES = {
         'USER': os.getenv("DB_USER"),
         'PASSWORD': os.getenv("DB_PASSWORD"),
         'HOST': os.getenv("DB_HOST"),
-        'PORT': os.getenv("DB_PORT"),
+        'PORT': os.getenv("DB_PORT", "5432"),
     }
 }
 
+# =========================
+# PASSWORD VALIDATION
+# =========================
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -95,9 +127,39 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# =========================
+# INTERNATIONALIZATION
+# =========================
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+# =========================
+# STATIC FILES
+# =========================
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STATICFILES_DIRS = [
+    BASE_DIR / "static"
+]
+
+# =========================
+# MEDIA FILES (PDF uploads)
+# =========================
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# =========================
+# DEFAULT PRIMARY KEY
+# =========================
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# =========================
+# OPTIONAL PRODUCTION SECURITY
+# Enable after deployment with HTTPS
+# =========================
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True

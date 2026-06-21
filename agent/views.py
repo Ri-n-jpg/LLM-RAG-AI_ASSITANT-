@@ -167,7 +167,8 @@ def chat(request):
             "summary" in msg_lower
         )
 
-        is_resume = "resume" in msg_lower
+        resume_keywords = ["resume", "cv", "profile"]
+        is_resume = any(word in msg_lower for word in resume_keywords)
 
         is_health = (
             "report" in msg_lower or
