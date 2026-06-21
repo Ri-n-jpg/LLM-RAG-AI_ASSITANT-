@@ -109,8 +109,9 @@ python manage.py runserver
 ```
 
 ---
+## Demo Video
+🎥 Watch the project demo here:
 
-#
-
+[Resume Analyzer Demo](https://drive.google.com/file/d/1fqiaHBJ4wdA6LTCqD6GqdXxu_XH_R35s/view?usp=drivesdk)
 ## Author
 Ritika Sharma
